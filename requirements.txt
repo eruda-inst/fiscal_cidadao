@@ -1,0 +1,6 @@
+pandas
+streamlit
+plotly
+plotly.express
+selenium
+webdriver-manager
