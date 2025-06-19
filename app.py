@@ -1,4 +1,3 @@
-# app.py - Versão 6 (FINAL) - Limpeza de dados de moeda robusta
 
 import streamlit as st
 import pandas as pd
@@ -7,99 +6,116 @@ import calendar
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="Dashboard de Despesas - Jacobina/BA",
+    page_title="Gastos Mensais - Jacobina/BA",
+    page_icon="📊",
     layout="wide"
 )
 
-# --- FUNÇÃO DE CARREGAMENTO DE DADOS (VERSÃO FINAL) ---
+# --- FUNÇÃO DE CARREGAMENTO DE DADOS (OTIMIZADA) ---
 @st.cache_data
 def carregar_dados():
-    caminho_do_arquivo = 'dados/despesas_2024_completo.csv'
+    # ATENÇÃO: Verifique se este é o nome do seu arquivo de dados unificado
+    caminho_do_arquivo = 'dados/despesas_2024_completo.csv' 
     
     try:
-        df_bruto = pd.read_csv(caminho_do_arquivo, sep=';', encoding='utf-8')
-    except UnicodeDecodeError:
-        df_bruto = pd.read_csv(caminho_do_arquivo, sep=';', encoding='latin-1')
+        df = pd.read_csv(caminho_do_arquivo, sep=';', encoding='latin-1')
+    except FileNotFoundError:
+        st.error(f"Arquivo não encontrado em '{caminho_do_arquivo}'. Verifique o nome e o caminho do seu arquivo de dados unificado.")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Ocorreu um erro inesperado ao ler o arquivo CSV: {e}")
+        st.error(f"Ocorreu um erro ao ler o arquivo CSV. Verifique a codificação e o formato do arquivo. Erro: {e}")
         return pd.DataFrame()
 
-    colunas_essenciais = ['Data', 'DescriÃ§Ã£o', 'Valor', 'Credor']
-    
-    if not all(coluna in df_bruto.columns for coluna in colunas_essenciais):
-        st.error("O arquivo CSV não contém as colunas esperadas ('Data', 'DescriÃ§Ã£o', 'Valor', 'Credor'). Verifique o arquivo baixado.")
-        return pd.DataFrame()
-
-    df = df_bruto[colunas_essenciais].copy()
-    df.rename(columns={'DescriÃ§Ã£o': 'Descricao'}, inplace=True)
-    
-    # --- LIMPEZA ROBUSTA DA COLUNA 'VALOR' ---
-    df['Valor'] = df['Valor'].astype(str) \
-                            .str.replace('R$', '', regex=False) \
-                            .str.replace('.', '', regex=False) \
-                            .str.replace(',', '.', regex=False) \
-                            .str.strip()
-
+    df.rename(columns={
+        'DescriÃ§Ã£o': 'Descricao',
+        'Unnamed: 7': 'Função'
+        }, inplace=True)
+    df['Valor'] = df['Valor'].astype(str).str.replace('R$', '', regex=False).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
     df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce')
-    df.dropna(subset=['Valor'], inplace=True) # Remove linhas onde a conversão ainda falhou
-    
-    # --- FIM DA CORREÇÃO ---
-    
     df['Data'] = pd.to_datetime(df['Data'], format='%d/%m/%Y', errors='coerce')
-    df.dropna(subset=['Data'], inplace=True)
+    df.dropna(subset=['Valor', 'Data'], inplace=True)
     
+    # Criação de novas colunas para filtros e gráficos
+    df['Ano'] = df['Data'].dt.year
     df['Mes_Num'] = df['Data'].dt.month
-    df['Mes_Nome'] = df['Mes_Num'].apply(lambda x: calendar.month_name[x].capitalize())
+    mapa_meses = {
+        1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril',
+        5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto',
+        9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
+    }
+    df['Mes_Nome'] = df['Mes_Num'].map(mapa_meses)
     
     return df
 
+# Carrega os dados
 df = carregar_dados()
 
-if not df.empty:
-    st.sidebar.header("Filtros")
-    lista_meses = df['Mes_Nome'].unique().tolist()
-    ordem_meses = list(calendar.month_name)[1:]
-    lista_meses_ordenada = sorted(lista_meses, key=lambda x: ordem_meses.index(x.lower().capitalize()))
-    lista_meses_ordenada.insert(0, "Todos")
-
-    mes_selecionado = st.sidebar.selectbox("Selecione um Mês:", lista_meses_ordenada)
-
-    if mes_selecionado == "Todos":
-        df_filtrado = df
-    else:
-        df_filtrado = df[df['Mes_Nome'] == mes_selecionado]
-
-    st.title("📊 Dashboard de Despesas Públicas - Jacobina/BA (2024)")
-    st.markdown(f"Analisando os gastos de: **{mes_selecionado}**")
-    st.header("Resumo Geral")
-    col1, col2, col3 = st.columns(3)
-    valor_total = df_filtrado['Valor'].sum()
-    col1.metric("Valor Total Gasto", f"R$ {valor_total:,.2f}")
-    total_transacoes = len(df_filtrado)
-    col2.metric("Total de Transações", f"{total_transacoes}")
-    if total_transacoes > 0:
-        media_por_transacao = valor_total / total_transacoes
-        col3.metric("Média por Transação", f"R$ {media_por_transacao:,.2f}")
-    else:
-        col3.metric("Média por Transação", "R$ 0,00")
-    st.divider()
-    st.header("Análises Detalhadas")
-    st.subheader(f"Top 10 Credores ({mes_selecionado})")
-    top_10_credores = df_filtrado.groupby('Credor')['Valor'].sum().nlargest(10).sort_values(ascending=True)
-    if not top_10_credores.empty:
-        fig_credores = px.bar(top_10_credores, x='Valor', y=top_10_credores.index, orientation='h', labels={'Valor': 'Valor Gasto (R$)', 'y': 'Credor'}, text_auto='.2s')
-        st.plotly_chart(fig_credores, use_container_width=True)
-    else:
-        st.warning("Não há dados de credores para exibir no período selecionado.")
-    if mes_selecionado == "Todos":
-        st.subheader("Gastos ao Longo do Ano")
-        gastos_mensais = df.groupby('Mes_Nome')['Valor'].sum().reset_index()
-        gastos_mensais_ordenados = sorted(gastos_mensais['Mes_Nome'].tolist(), key=lambda x: ordem_meses.index(x.lower().capitalize()))
-        
-        fig_linha_tempo = px.line(gastos_mensais, x='Mes_Nome', y='Valor', category_orders={"Mes_Nome": gastos_mensais_ordenados}, title="Evolução Mensal dos Gastos", labels={'Mes_Nome': 'Mês', 'Valor': 'Valor Gasto (R$)'}, markers=True)
-        st.plotly_chart(fig_linha_tempo, use_container_width=True)
-
-    with st.expander("Clique para ver a tabela de dados completa"):
-        st.dataframe(df_filtrado)
+if df.empty:
+    st.warning("Não há dados para exibir. Verifique as mensagens de erro acima.")
 else:
-    st.error("Não foi possível carregar os dados para exibir o dashboard. Verifique o arquivo CSV e as mensagens de erro acima.")
+    # --- BARRA LATERAL (SIDEBAR) COM O FILTRO DE ANO ---
+    st.sidebar.header("Filtros")
+
+    anos_disponiveis = sorted(df['Ano'].unique(), reverse=True)
+    ano_selecionado = st.sidebar.selectbox(
+        "Selecione o Ano:",
+        anos_disponiveis
+    )
+
+    # --- FILTRAGEM DOS DADOS COM BASE NO ANO SELECIONADO ---
+    df_filtrado_ano = df[df['Ano'] == ano_selecionado]
+    st.sidebar.subheader("Filtro por Função")
+    funcoes_disponiveis = sorted(df_filtrado_ano['Função'].dropna().unique())
+    funcoes_selecionadas = st.sidebar.multiselect(
+    "Selecione uma ou mais Funções:",
+    options=funcoes_disponiveis,
+    default=funcoes_disponiveis 
+)
+    if funcoes_selecionadas:
+        df_filtrado = df_filtrado_ano[df_filtrado_ano['Função'].isin(funcoes_selecionadas)]
+    else:
+        df_filtrado = pd.DataFrame(columns=df_filtrado_ano.columns)
+
+    # --- DASHBOARD PRINCIPAL ---
+    st.title(f"📊 Análise de Despesas Públicas - Jacobina/BA")
+    st.subheader(f"Visão Mensal para o Ano de {ano_selecionado}")
+    st.divider()
+
+    # --- MÉTRICAS (KPIs) PARA O ANO SELECIONADO ---
+    col1, col2, col3 = st.columns(3)
+    valor_total_ano = df_filtrado['Valor'].sum()
+    col1.metric("Valor Total Gasto no Ano", f"R$ {valor_total_ano:,.2f}")
+    total_transacoes_ano = len(df_filtrado)
+    col2.metric("Nº de Transações no Ano", f"{total_transacoes_ano:,}")
+    media_por_transacao_ano = valor_total_ano / total_transacoes_ano if total_transacoes_ano > 0 else 0
+    col3.metric("Média por Transação", f"R$ {media_por_transacao_ano:,.2f}")
+    st.divider()
+
+    # --- GRÁFICO ÚNICO E PRINCIPAL ---
+    st.subheader(f"Gastos por mês no ano de {ano_selecionado}")
+
+    # Preparando os dados para o gráfico
+    gastos_mensais = df_filtrado.groupby(['Mes_Num', 'Mes_Nome'])['Valor'].sum().reset_index()
+    gastos_mensais.sort_values('Mes_Num', inplace=True)
+
+    # Criando o gráfico de linha
+    fig_barras_anual = px.bar(
+        gastos_mensais,
+        x='Mes_Nome',
+        y='Valor',
+        title=f"Comparativo de Gastos Mensais em {ano_selecionado}",
+        labels={'Mes_Nome': 'Mês', 'Valor': 'Valor Gasto (R$)'},
+        text_auto='.2s', # <--- ESTA LINHA ADICIONA OS VALORES
+        height=500
+    )
+    fig_barras_anual.update_traces(textposition='outside') # Coloca os valores fora das barras
+    fig_barras_anual.update_layout(
+        yaxis_title="Valor Gasto (R$)", 
+        xaxis_title="Mês do Ano"
+    )
+    st.plotly_chart(fig_barras_anual, use_container_width=True)
+    # --- FIM DA MUDANÇA ---
+
+    # Expander para mostrar os dados brutos do ano selecionado
+    with st.expander(f"Ver dados brutos de {ano_selecionado}"):
+        st.dataframe(df_filtrado)
