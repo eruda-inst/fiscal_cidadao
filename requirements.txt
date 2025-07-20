@@ -4,3 +4,6 @@ plotly
 plotly.express
 selenium
 webdriver-manager
+google-generativeai
+python-dotenv
+tabulate
