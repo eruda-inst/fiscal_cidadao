@@ -42,6 +42,14 @@ if todos_os_arquivos:
 
 if lista_de_dataframes:
     df_completo = pd.concat(lista_de_dataframes, ignore_index=True)
+    if df_completo.shape[1] > 1:
+        coluna_de_verificacao = df_completo.iloc[:, 1].astype(str)
+        df_completo_limpo = df_completo[coluna_de_verificacao != 'Data'].copy()
+        print(f'\nLimpeza realizada: {len(df_completo) - len(df_completo_limpo)} linhas removidas.')
+
+    else:
+        df_completo_limpo = df_completo
+
 
     NOMES_COLUNAS = [
         'Coluna Vazia 1', 'Data', 'Descricao', 'Valor', 'Credor', 'CNPJ/CPF', 
@@ -50,14 +58,14 @@ if lista_de_dataframes:
         'Coluna Vazia 2', 'Coluna Vazia 3', 'Coluna Vazia 4', 'Coluna Vazia 5', 
         'Coluna Vazia 6', 'Coluna Vazia 7', 'Coluna Vazia 8'
     ]
-    if len(df_completo.columns) == len(NOMES_COLUNAS):
-        df_completo.columns = NOMES_COLUNAS
+    if len(df_completo_limpo.columns) == len(NOMES_COLUNAS):
+        df_completo_limpo.columns = NOMES_COLUNAS
 
     caminho_final = 'dados/despesas_completo.csv' 
-    df_completo.to_csv(caminho_final, sep=';', index=False, encoding='utf-8-sig') 
+    df_completo_limpo.to_csv(caminho_final, sep=';', index=False, encoding='utf-8-sig') 
 
     print(f"\nSucesso! {len(lista_de_dataframes)} arquivos foram juntados.")
     print(f"O arquivo final foi salvo em: '{caminho_final}'")
-    print(f"Total de linhas no arquivo final: {len(df_completo)}")
+    print(f"Total de linhas no arquivo final: {len(df_completo_limpo)}")
 else:
     print("Nenhum arquivo CSV encontrado ou processado na pasta.")

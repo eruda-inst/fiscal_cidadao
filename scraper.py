@@ -126,6 +126,19 @@ if MODO_REVERSO:
             
             driver.execute_script("arguments[0].click();", prev_page_button)
             print("Indo para a página anterior...")
+
+            # <<< INÍCIO DA ESPERA INTELIGENTE >>>
+            try:
+                # Espera o overlay de carregamento aparecer e depois desaparecer
+                wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "swal2-container")))
+                long_wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "swal2-container")))
+                print(" -> Página anterior carregada.")
+            except TimeoutException:
+                # Se o overlay não aparecer, a página pode ter carregado rápido demais.
+                print(" -> Carregamento rápido ou sem overlay. Continuando...")
+                time.sleep(1) # Pequena pausa de segurança
+            # <<< FIM DA ESPERA INTELIGENTE >>>
+
             pagina_atual -= 1
 
         except StaleElementReferenceException:
@@ -183,6 +196,19 @@ else:
             
             driver.execute_script("arguments[0].click();", next_page_button)
             print("Indo para a próxima página...")
+
+            # <<< INÍCIO DA ESPERA INTELIGENTE >>>
+            try:
+                # Espera o overlay de carregamento aparecer e depois desaparecer
+                wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "swal2-container")))
+                long_wait.until(EC.invisibility_of_element_located((By.CLASS_NAME, "swal2-container")))
+                print(" -> Página seguinte carregada.")
+            except TimeoutException:
+                # Se o overlay não aparecer, a página pode ter carregado rápido demais.
+                print(" -> Carregamento rápido ou sem overlay. Continuando...")
+                time.sleep(1) # Pequena pausa de segurança
+            # <<< FIM DA ESPERA INTELIGENTE >>>
+
             pagina_atual += 1
             
         except StaleElementReferenceException:

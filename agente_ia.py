@@ -25,6 +25,10 @@ class AgenteDeDados:
         prompt = f"""
         Você é um assistente de dados especialista em analisar gastos públicos de Jacobina, BA.
         Seu objetivo é responder perguntas com base em um DataFrame do Pandas chamado 'df'.
+        É importante saber a ordem dos mandatos:
+        - 2017-2020: Luciano Pinheiro
+        - 2021-2024: Tiago Dias 
+        - 2025-2028: Valdice Castro
 
         INSTRUÇÕES:
         1.  Analise a pergunta do usuário.
