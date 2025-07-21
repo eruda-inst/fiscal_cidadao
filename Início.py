@@ -13,11 +13,11 @@ st.set_page_config(
 
 @st.cache_data
 def carregar_dados():
-    caminho_arquivo = 'dados/despesas_completo.csv'
+    caminho_arquivo = 'dados/despesas_completo.parquet'
     if not os.path.exists(caminho_arquivo):
         return None
     
-    df = pd.read_csv(caminho_arquivo, sep=';', encoding='utf-8-sig')
+    df = pd.read_parquet('dados/despesas_completo.parquet')
     
     df['Valor_Num'] = df['Valor'].astype(str).str.replace(r'[R$\s.]', '', regex=True).str.replace(',', '.', regex=True)
     df['Valor_Num'] = pd.to_numeric(df['Valor_Num'], errors='coerce')
