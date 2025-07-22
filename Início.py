@@ -35,31 +35,42 @@ with col1:
     st.markdown("Uma visão simplificada e interativa dos gastos públicos do município.")
 
 with col2:
-    # --- Lógica para Calcular o Tempo Passado ---
+    # --- INÍCIO DA LÓGICA DINÂMICA ---
     
-    # 1. Defina a data da última atualização
-    data_ultima_att_str = "31/12/2024 16:01:27"
-    data_ultima_att = datetime.strptime(data_ultima_att_str, "%d/%m/%Y %H:%M:%S")
-
-    # 2. Obtenha a data e hora atuais
-    hoje = datetime.now()
-
-    # 3. Calcule a diferença em meses
-    diferenca_meses = (hoje.year - data_ultima_att.year) * 12 + (hoje.month - data_ultima_att.month)
-    # Ajuste fino: se o dia de hoje for menor que o dia da atualização, o mês não "completou"
-    if hoje.day < data_ultima_att.day:
-        diferenca_meses -= 1
+    caminho_arquivo_data = "ultima_atualizacao.txt"
+    data_ultima_att_str = None
     
-    # 4. Crie o texto dinâmico
-    if diferenca_meses <= 0:
-        texto_tempo_passado = "(este mês)"
-    elif diferenca_meses == 1:
-        texto_tempo_passado = "(há 1 mês)"
+    # 1. Tenta ler a data do arquivo
+    if os.path.exists(caminho_arquivo_data):
+        with open(caminho_arquivo_data, 'r') as f:
+            data_ultima_att_str = f.read().strip()
+    
+    # 2. Se a data foi lida com sucesso, calcula o tempo passado
+    if data_ultima_att_str:
+        try:
+            data_ultima_att = datetime.strptime(data_ultima_att_str, "%d/%m/%Y %H:%M:%S")
+            hoje = datetime.now()
+
+            diferenca_meses = (hoje.year - data_ultima_att.year) * 12 + (hoje.month - data_ultima_att.month)
+            if hoje.day < data_ultima_att.day:
+                diferenca_meses -= 1
+            
+            if diferenca_meses <= 0:
+                texto_tempo_passado = "(este mês)"
+            elif diferenca_meses == 1:
+                texto_tempo_passado = "(há 1 mês)"
+            else:
+                texto_tempo_passado = f"(há {diferenca_meses} meses)"
+            
+            # Exibe a data lida e o tempo calculado
+            st.caption(f"Última atualização: {data_ultima_att.strftime('%d/%m/%Y %H:%M')} {texto_tempo_passado}")
+
+        except ValueError:
+            # Se o arquivo tiver um conteúdo inválido
+            st.caption(f"Última atualização: {data_ultima_att_str} (formato inválido)")
     else:
-        texto_tempo_passado = f"(há {diferenca_meses} meses)"
-    
-    # 5. Exiba o resultado formatado
-    st.caption(f"Última atualização: {data_ultima_att.strftime('%d/%m/%Y %H:%M')} {texto_tempo_passado}")
+        # 3. Se o arquivo não existir, mostra uma mensagem padrão
+        st.caption("Ainda não há dados de atualização.")
 
 
 # --- Barra Lateral de Filtros ---

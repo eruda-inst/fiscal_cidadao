@@ -1,62 +1,91 @@
+# juntar_csv.py
 import pandas as pd
 import os
 import re
 
-caminho_da_pasta = 'dados/csv_parciais/'
-print("Listando e ordenando os arquivos...")
-try:
-    todos_os_arquivos = [f for f in os.listdir(caminho_da_pasta) if f.endswith('.csv')]
-    if not todos_os_arquivos:
-        raise FileNotFoundError
-    
-    def extrair_numero(nome_arquivo):
-        match = re.search(r'pagina_(\d+).csv', nome_arquivo)
-        return int(match.group(1)) if match else 0
+# --- CONFIGURAÇÕES ---
+# Pasta onde o scraper incremental salva os novos CSVs
+DOWNLOAD_DIR_TEMP = os.path.abspath('dados/csv_novos')
+# O arquivo principal e final com todos os dados
+PARQUET_FILE = os.path.abspath('dados/despesas_completo.parquet')
+# Nomes das colunas para os novos dados
+NOMES_COLUNAS = [
+    'Coluna Vazia 1', 'Data', 'Descricao', 'Valor', 'Credor', 'CNPJ/CPF', 'Orgao', 
+    'Unidade Orcamentaria', 'Fonte Recurso', 'Funcao', 'Num Licitacao', 'Elemento Despesa', 
+    'Fase', 'Num Empenho', 'Coluna Vazia 2', 'Coluna Vazia 3', 'Coluna Vazia 4', 'Coluna Vazia 5', 
+    'Coluna Vazia 6', 'Coluna Vazia 7', 'Coluna Vazia 8'
+]
 
-    todos_os_arquivos.sort(key=extrair_numero)
-    print(f"{len(todos_os_arquivos)} arquivos prontos para serem processados.")
+def limpar_arquivos_temporarios():
+    """Apaga os arquivos da pasta temporária após a unificação."""
+    print(f"Limpando a pasta temporária '{DOWNLOAD_DIR_TEMP}'...")
+    try:
+        for f in os.listdir(DOWNLOAD_DIR_TEMP):
+            os.remove(os.path.join(DOWNLOAD_DIR_TEMP, f))
+        print("Limpeza concluída.")
+    except Exception as e:
+        print(f"Erro ao limpar a pasta temporária: {e}")
 
-except FileNotFoundError:
-    print(f"Erro: A pasta '{caminho_da_pasta}' não foi encontrada ou está vazia.")
-    todos_os_arquivos = []
+# --- LÓGICA PRINCIPAL DA UNIFICAÇÃO ---
+if __name__ == "__main__":
+    print("Iniciando o processo de unificação incremental...")
 
-if todos_os_arquivos:
-    print("\nIniciando a junção dos arquivos CSV...")
-    lista_de_dataframes = [pd.read_csv(os.path.join(caminho_da_pasta, f), encoding='utf-8', sep=',', header=None, low_memory=False) for f in todos_os_arquivos]
-    
-    df_completo = pd.concat(lista_de_dataframes, ignore_index=True)
+    # 1. Ler os novos arquivos CSV da pasta temporária
+    try:
+        arquivos_novos = [f for f in os.listdir(DOWNLOAD_DIR_TEMP) if f.endswith('.csv')]
+        if not arquivos_novos:
+            print("Nenhum arquivo novo encontrado na pasta temporária. Nenhum trabalho a fazer.")
+            exit(0)
+    except FileNotFoundError:
+        print(f"Pasta temporária '{DOWNLOAD_DIR_TEMP}' não encontrada. Nenhum trabalho a fazer.")
+        exit(0)
 
-    df_completo.columns = [f'col_{i}' for i in range(len(df_completo.columns))]
-    coluna_data_str = df_completo['col_1'].astype(str)
-    df_limpo = df_completo[coluna_data_str.str.contains('/', na=False)].copy()
-    print(f"\nLimpeza realizada: {len(df_completo) - len(df_limpo)} linhas inválidas foram removidas.")
+    print(f"Encontrados {len(arquivos_novos)} novos arquivos CSV para processar.")
+    lista_dfs_novos = [pd.read_csv(os.path.join(DOWNLOAD_DIR_TEMP, f), encoding='utf-8', sep=',', header=None, low_memory=False) for f in arquivos_novos]
+    df_novos = pd.concat(lista_dfs_novos, ignore_index=True)
 
-    if df_limpo.empty:
-        print("ERRO CRÍTICO: Nenhum dado válido restou após a limpeza.")
+    # 2. Limpar e estruturar os dados novos
+    df_novos.columns = [f'col_{i}' for i in range(len(df_novos.columns))]
+    df_novos = df_novos[df_novos['col_1'].astype(str).str.contains('/', na=False)].copy()
+    df_novos.columns = NOMES_COLUNAS[:len(df_novos.columns)]
+    print(f"{len(df_novos)} novos registros de dados foram lidos e limpos.")
+
+    # 3. Carregar os dados antigos (se existirem)
+    if os.path.exists(PARQUET_FILE):
+        print(f"Carregando dados antigos de '{PARQUET_FILE}'...")
+        df_antigo = pd.read_parquet(PARQUET_FILE)
+        print(f"{len(df_antigo)} registros antigos carregados.")
+        
+        # Junta o antigo com o novo
+        df_final = pd.concat([df_novos, df_antigo], ignore_index=True)
     else:
-        NOMES_COLUNAS = [
-            'Coluna Vazia 1', 'Data', 'Descricao', 'Valor', 'Credor', 'CNPJ/CPF', 
-            'Orgao', 'Unidade Orcamentaria', 'Fonte Recurso', 'Funcao', 
-            'Num Licitacao', 'Elemento Despesa', 'Fase', 'Num Empenho', 
-            'Coluna Vazia 2', 'Coluna Vazia 3', 'Coluna Vazia 4', 'Coluna Vazia 5', 
-            'Coluna Vazia 6', 'Coluna Vazia 7', 'Coluna Vazia 8'
-        ]
-        df_limpo.columns = NOMES_COLUNAS[:len(df_limpo.columns)]
+        print("Arquivo Parquet principal não encontrado. Este será o primeiro carregamento.")
+        df_final = df_novos
 
-        # --- INÍCIO DA CORREÇÃO DEFINITIVA ---
-        # Itera sobre todas as colunas do DataFrame.
-        # Se uma coluna for do tipo 'object' (misto/texto), ela é convertida para string.
-        print("Forçando a conversão de todas as colunas de texto para string...")
-        for col in df_limpo.columns:
-            if df_limpo[col].dtype == 'object':
-                df_limpo[col] = df_limpo[col].astype(str)
-        # --- FIM DA CORREÇÃO DEFINITIVA ---
+    # 4. Remover duplicatas para garantir a integridade dos dados
+    print("Removendo possíveis duplicatas...")
+    # Uma chave de identificação forte para uma despesa
+    chave_duplicata = ['Num Empenho', 'Data', 'Valor', 'Fase', 'Descricao'] 
+    registros_antes = len(df_final)
+    df_final.drop_duplicates(subset=chave_duplicata, keep='first', inplace=True)
+    registros_depois = len(df_final)
+    print(f"{registros_antes - registros_depois} duplicatas foram removidas.")
 
-        caminho_final_parquet = 'dados/despesas_completo.parquet'
-        df_limpo.to_parquet(caminho_final_parquet, index=False)
+    # 5. Forçar tipos de dados para evitar erros ao salvar
+    print("Garantindo os tipos de dados corretos antes de salvar...")
+    for col in df_final.columns:
+        if df_final[col].dtype == 'object':
+            df_final[col] = df_final[col].astype(str)
 
-        print(f"\n✅ Sucesso! Os dados foram juntados e salvos em formato Parquet.")
-        print(f"O arquivo final foi salvo em: '{caminho_final_parquet}'")
-        print(f"Total de linhas no arquivo final: {len(df_limpo)}")
-else:
-    print("Nenhum arquivo CSV encontrado ou processado na pasta.")
+    # 6. Salvar o resultado final
+    try:
+        df_final.to_parquet(PARQUET_FILE, index=False)
+        print(f"\n✅ Sucesso! Arquivo '{PARQUET_FILE}' foi atualizado com sucesso.")
+        print(f"Total de registros no arquivo final: {len(df_final)}")
+        
+        # 7. Limpar os arquivos temporários
+        limpar_arquivos_temporarios()
+    except Exception as e:
+        print(f"\n❌ ERRO CRÍTICO ao salvar o arquivo Parquet final: {e}")
+        print("Os arquivos temporários não foram apagados para permitir a depuração.")
+        exit(1)
